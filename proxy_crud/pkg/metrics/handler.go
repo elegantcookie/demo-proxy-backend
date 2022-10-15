@@ -5,13 +5,13 @@ import (
 	"net/http"
 )
 
-const HeartbeatURL = "api/proxy_crud/heartbeat"
+const HeartbeatURL = "/heartbeat"
 
 type Handler struct {
 }
 
-func (h *Handler) Register(router gin.IRouter) {
-	router.Handle(http.MethodGet, HeartbeatURL, gin.WrapF(h.Heartbeat))
+func (h *Handler) Register(group *gin.RouterGroup) {
+	group.Handle(http.MethodGet, HeartbeatURL, gin.WrapF(h.Heartbeat))
 }
 
 // Heartbeat checks if the service is up
@@ -19,7 +19,7 @@ func (h *Handler) Register(router gin.IRouter) {
 // @Tags Metrics
 // @Success 204
 // @Failure 400
-// @Router /api/proxy_crud/heartbeat [get]
+// @Router /heartbeat [get]
 func (h *Handler) Heartbeat(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(204)
 }

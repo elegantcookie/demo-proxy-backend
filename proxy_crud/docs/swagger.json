@@ -1,0 +1,29 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "CRUD.",
+        "title": "Proxy Crud Service",
+        "contact": {},
+        "version": "1.0"
+    },
+    "host": "localhost:10000",
+    "basePath": "/api/proxy_crud/v1",
+    "paths": {
+        "/heartbeat": {
+            "get": {
+                "tags": [
+                    "Metrics"
+                ],
+                "summary": "Heartbeat metric",
+                "responses": {
+                    "204": {
+                        "description": ""
+                    },
+                    "400": {
+                        "description": ""
+                    }
+                }
+            }
+        }
+    }
+}

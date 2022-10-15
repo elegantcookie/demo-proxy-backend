@@ -13,6 +13,14 @@ type service struct {
 	logger  logging.Logger
 }
 
+func NewService(ProxyStorage Storage, logger *logging.Logger) (Service, error) {
+	return &service{
+		storage: ProxyStorage,
+		//cache:   Cache,
+		logger: *logger,
+	}, nil
+}
+
 func (s service) AddProxies(ctx context.Context, dto []CreateProxyDTO) error {
 	proxies := NewProxies(dto)
 	err := s.storage.Insert(ctx, proxies)

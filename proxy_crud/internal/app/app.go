@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/cors"
-	uuid "github.com/satori/go.uuid"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"net"
 	"net/http"
@@ -38,15 +37,15 @@ func NewApp(cfg *config.Config, logger *logging.Logger) (App, error) {
 	// add recovery middleware
 	// recovers from any panics and writes a 500 if there was one.
 	router.Use(gin.Recovery())
-	//v1 := router.Group("/api/v1")
+	v1 := router.Group("/api/proxy_crud/v1")
 	logger.Println("swagger docs initialization")
 	// use wrappers to make it compatible with default http.HandleFunc
-	router.Handle(http.MethodGet, "proxy_crud/docs", gin.WrapH(http.RedirectHandler("proxy_crud/docs/index.html", http.StatusMovedPermanently)))
-	router.Handle(http.MethodGet, "proxy_crud/docs/*any", gin.WrapH(httpSwagger.WrapHandler))
+	v1.Handle(http.MethodGet, "/docs", gin.WrapH(http.RedirectHandler("/api/proxy_crud/v1/docs/index.html", http.StatusMovedPermanently)))
+	v1.Handle(http.MethodGet, "/docs/*any", gin.WrapH(httpSwagger.WrapHandler))
 
 	logger.Println("heartbeat metric initializing")
 	metricHandler := metrics.Handler{}
-	metricHandler.Register(router)
+	metricHandler.Register(v1)
 
 	psqlClient, err := postgresql.NewClient(context.TODO(), 3, cfg.Storage)
 	if err != nil {
@@ -54,48 +53,51 @@ func NewApp(cfg *config.Config, logger *logging.Logger) (App, error) {
 	}
 
 	storage := db.NewStorage(psqlClient, logger)
+	fmt.Printf("%v", storage)
 
-	p := []proxy.Proxy{
-		proxy.NewProxy(proxy.CreateProxyDTO{
-			Ip:         "1.2.3.4",
-			Port:       10,
-			ExternalIP: "1.2.3.4",
-			Country:    "Russia",
-		}),
-		proxy.NewProxy(proxy.CreateProxyDTO{
-			Ip:         "1.2.3.4",
-			Port:       10,
-			ExternalIP: "1.2.3.4",
-			Country:    "Russia",
-		}),
-		proxy.NewProxy(proxy.CreateProxyDTO{
-			Ip:         "1.2.3.4",
-			Port:       10,
-			ExternalIP: "1.2.3.4",
-			Country:    "Russia",
-		}),
-		proxy.NewProxy(proxy.CreateProxyDTO{
-			Ip:         "1.2.3.4",
-			Port:       10,
-			ExternalIP: "1.2.3.4",
-			Country:    "Russia",
-		}),
-		proxy.NewProxy(proxy.CreateProxyDTO{
-			Ip:         "1.2.3.4",
-			Port:       10,
-			ExternalIP: "1.2.3.4",
-			Country:    "Russia",
-		}),
-	}
-	for i := 0; i < 5; i++ {
-		id := uuid.NewV4()
-		p[i].ID = id.String()
-	}
+	service, _ := proxy.NewService(storage, logger)
 
-	err = storage.Insert(context.TODO(), p)
-	if err != nil {
-		logger.Fatalf("%v", err)
-	}
+	//p := []proxy.Proxy{
+	//	proxy.NewProxy(proxy.CreateProxyDTO{
+	//		Ip:         "1.2.3.4",
+	//		Port:       10,
+	//		ExternalIP: "1.2.3.4",
+	//		Country:    "Russia",
+	//	}),
+	//	proxy.NewProxy(proxy.CreateProxyDTO{
+	//		Ip:         "1.2.3.4",
+	//		Port:       10,
+	//		ExternalIP: "1.2.3.4",
+	//		Country:    "Russia",
+	//	}),
+	//	proxy.NewProxy(proxy.CreateProxyDTO{
+	//		Ip:         "1.2.3.4",
+	//		Port:       10,
+	//		ExternalIP: "1.2.3.4",
+	//		Country:    "Russia",
+	//	}),
+	//	proxy.NewProxy(proxy.CreateProxyDTO{
+	//		Ip:         "1.2.3.4",
+	//		Port:       10,
+	//		ExternalIP: "1.2.3.4",
+	//		Country:    "Russia",
+	//	}),
+	//	proxy.NewProxy(proxy.CreateProxyDTO{
+	//		Ip:         "1.2.3.4",
+	//		Port:       10,
+	//		ExternalIP: "1.2.3.4",
+	//		Country:    "Russia",
+	//	}),
+	//}
+	//for i := 0; i < 5; i++ {
+	//	id := uuid.NewV4()
+	//	p[i].ID = id.String()
+	//}
+	//
+	//err = storage.Insert(context.TODO(), p)
+	//if err != nil {
+	//	logger.Fatalf("%v", err)
+	//}
 	//p := proxy.Proxy{
 	//	Ip:         "1.2.3.4",
 	//	Port:       10,
@@ -115,11 +117,11 @@ func NewApp(cfg *config.Config, logger *logging.Logger) (App, error) {
 	//}
 	//fmt.Println(p)
 
-	proxies, err := storage.FindAll(context.TODO())
-	if err != nil {
-		logger.Fatalf("%v", err)
-	}
-	fmt.Println(proxies)
+	//proxies, err := storage.FindAll(context.TODO())
+	//if err != nil {
+	//	logger.Fatalf("%v", err)
+	//}
+	//fmt.Println(proxies)
 
 	//redisClient, err := redis.NewClient()
 	//if err != nil {
@@ -133,11 +135,11 @@ func NewApp(cfg *config.Config, logger *logging.Logger) (App, error) {
 	//	panic(err)
 	//}
 
-	//usersHandler := user.Handler{
-	//	Logger:      logging.GetLogger(cfg.AppConfig.LogLevel),
-	//	UserService: service,
-	//}
-	//usersHandler.Register(router)
+	proxyHandler := proxy.Handler{
+		Logger:       *logger,
+		ProxyService: service,
+	}
+	proxyHandler.Register(v1)
 
 	return App{
 		cfg,

@@ -5,12 +5,13 @@ go 1.19
 require (
 	github.com/gin-gonic/gin v1.8.1
 	github.com/ilyakaznacheev/cleanenv v1.4.0
-	github.com/jackc/pgconn v1.13.0
 	github.com/jackc/pgx/v5 v5.0.2
 	github.com/rs/cors v1.8.2
-	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.9.0
+	github.com/swaggo/files v0.0.0-20220728132757-551d4a08d97a
+	github.com/swaggo/gin-swagger v1.5.3
 	github.com/swaggo/http-swagger v1.3.3
+	github.com/swaggo/swag v1.8.6
 )
 
 require (
@@ -25,10 +26,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.0 // indirect
 	github.com/go-playground/validator/v10 v10.10.0 // indirect
 	github.com/goccy/go-json v0.9.7 // indirect
-	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
-	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
-	github.com/jackc/pgproto3/v2 v2.3.1 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
 	github.com/jackc/puddle/v2 v2.0.0 // indirect
 	github.com/joho/godotenv v1.4.0 // indirect
@@ -40,8 +38,6 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.1 // indirect
-	github.com/swaggo/files v0.0.0-20220610200504-28940afbdbfe // indirect
-	github.com/swaggo/swag v1.8.1 // indirect
 	github.com/ugorji/go/codec v1.2.7 // indirect
 	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90 // indirect
 	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4 // indirect
