@@ -1,6 +1,9 @@
-package proxy
+package model
 
-import "time"
+import (
+	"github.com/google/uuid"
+	"time"
+)
 
 type Proxy struct {
 	ID               string    `json:"id"`
@@ -16,4 +19,25 @@ type Proxy struct {
 	ValidAt          time.Time `json:"valid_at"`
 	BLCheck          int       `json:"bl_check"`
 	ProcessingStatus int       `json:"processing_status"`
+}
+
+// NewProxy transfers DTO to proxy, generating uuid and time of creation
+func NewProxy(dto CreateProxyDTO) Proxy {
+	return Proxy{
+		ID:         uuid.NewString(),
+		Ip:         dto.Ip,
+		Port:       dto.Port,
+		ExternalIP: dto.ExternalIP,
+		Country:    dto.Country,
+		CreatedAt:  time.Now(),
+	}
+}
+
+// NewProxies transfers DTOs to proxies
+func NewProxies(dto []CreateProxyDTO) []Proxy {
+	proxies := make([]Proxy, len(dto))
+	for i := 0; i < len(dto); i++ {
+		proxies[i] = NewProxy(dto[i])
+	}
+	return proxies
 }

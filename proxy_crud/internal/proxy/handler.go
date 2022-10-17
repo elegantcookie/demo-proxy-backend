@@ -4,22 +4,66 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"io"
 	"net/http"
 	"proxy_crud/internal/proxy/apperror"
+	"proxy_crud/internal/proxy/model"
+	"proxy_crud/internal/proxy/service"
+	"proxy_crud/pkg/api/filter"
 	"proxy_crud/pkg/logging"
+	"proxy_crud/pkg/utils/parser"
 )
 
 type Handler struct {
 	Logger       logging.Logger
-	ProxyService Service
+	ProxyService service.Service
 }
 
 const (
-	getAllUrl = "/get/all"
+	getAllUrl       = "/get/all"
+	getByIDUrl      = "/get/id/:id"
+	addProxiesByURL = "/add/many/url"
+	deleteAllURL    = "/delete/all"
 )
 
 func (h *Handler) Register(group *gin.RouterGroup) {
-	group.Handle(http.MethodGet, getAllUrl, gin.WrapF(apperror.Middleware(h.GetProxies)))
+	group.Handle(http.MethodGet, getAllUrl, gin.WrapF(
+		filter.Middleware(
+			apperror.Middleware(h.GetProxies), "port", "ASC")))
+	group.Handle(http.MethodGet, getByIDUrl, apperror.GinMiddleware(h.GetProxyByID))
+	group.Handle(http.MethodPost, addProxiesByURL, gin.WrapF(apperror.Middleware(h.AddProxies)))
+	group.Handle(http.MethodDelete, deleteAllURL, gin.WrapF(apperror.Middleware(h.DeleteAll)))
+}
+
+func (h *Handler) AddProxies(w http.ResponseWriter, r *http.Request) error {
+	bytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read body: %v", err)
+	}
+	str := string(bytes)
+	proxyLines := parser.SplitText(str)
+	var proxyDTOs []model.CreateProxyDTO
+	//h.Logger.Println(proxyLines)
+	for i := 0; i < len(proxyLines); i++ {
+		pf, err := parser.ParseLine(proxyLines[i])
+		if err != nil {
+			h.Logger.Errorf("failed to parse line: %v", err)
+			continue
+		}
+
+		proxyDTO, err := model.NewCreateProxyDTO(pf.Ip, pf.Port, pf.ExternalIp, pf.Country)
+		if err != nil {
+			h.Logger.Errorf("%v", err)
+			continue
+		}
+		proxyDTOs = append(proxyDTOs, proxyDTO)
+	}
+	//h.Logger.Info(proxyDTOs)
+	err = h.ProxyService.AddProxies(r.Context(), proxyDTOs)
+	if err != nil {
+		return fmt.Errorf("failed to add proxies: %v", err)
+	}
+	return nil
 }
 
 // GetUsers swaggo
@@ -33,7 +77,12 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 func (h *Handler) GetProxies(w http.ResponseWriter, r *http.Request) error {
 	w.Header().Set("Content-Type", "application/json")
 
-	proxies, err := h.ProxyService.GetAll(r.Context())
+	var filterOptions filter.Options
+	if options, ok := r.Context().Value(filter.OptionsSortKey).(filter.Options); ok {
+		filterOptions = options
+	}
+
+	proxies, err := h.ProxyService.GetAll(r.Context(), filterOptions)
 	if err != nil {
 		return err
 	}
@@ -45,5 +94,23 @@ func (h *Handler) GetProxies(w http.ResponseWriter, r *http.Request) error {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write(bytes)
+	return nil
+}
+
+func (h *Handler) GetProxyByID(c *gin.Context) error {
+	id := c.Param("id")
+	proxy, err := h.ProxyService.GetById(c, id)
+	if err != nil {
+		return err
+	}
+	c.JSON(http.StatusOK, proxy)
+	return nil
+}
+
+func (h *Handler) DeleteAll(w http.ResponseWriter, r *http.Request) error {
+	err := h.ProxyService.DeleteAll(r.Context())
+	if err != nil {
+		return fmt.Errorf("failed to delete all: %v", err)
+	}
 	return nil
 }

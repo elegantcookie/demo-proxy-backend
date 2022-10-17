@@ -15,6 +15,7 @@ import (
 	"proxy_crud/internal/config"
 	"proxy_crud/internal/proxy"
 	"proxy_crud/internal/proxy/db"
+	"proxy_crud/internal/proxy/service"
 	"proxy_crud/pkg/client/postgresql"
 	"proxy_crud/pkg/logging"
 	"proxy_crud/pkg/metrics"
@@ -55,7 +56,7 @@ func NewApp(cfg *config.Config, logger *logging.Logger) (App, error) {
 	storage := db.NewStorage(psqlClient, logger)
 	fmt.Printf("%v", storage)
 
-	service, _ := proxy.NewService(storage, logger)
+	service, _ := service.NewService(storage, logger)
 
 	//p := []proxy.Proxy{
 	//	proxy.NewProxy(proxy.CreateProxyDTO{
@@ -94,7 +95,7 @@ func NewApp(cfg *config.Config, logger *logging.Logger) (App, error) {
 	//	p[i].ID = id.String()
 	//}
 	//
-	//err = storage.Insert(context.TODO(), p)
+	//err = pstorage.Insert(context.TODO(), p)
 	//if err != nil {
 	//	logger.Fatalf("%v", err)
 	//}
@@ -106,18 +107,18 @@ func NewApp(cfg *config.Config, logger *logging.Logger) (App, error) {
 	//	Country:    "Zimbabve",
 	//}
 	//
-	//id, err := storage.InsertOne(context.TODO(), p)
+	//id, err := pstorage.InsertOne(context.TODO(), p)
 	//if err != nil {
 	//	log.Fatal("%v", err)
 	//}
 	//fmt.Println(id)
-	//p, err := storage.FindById(context.TODO(), "88edcf8d-110b-447b-8252-3becbbd86626")
+	//p, err := pstorage.FindById(context.TODO(), "88edcf8d-110b-447b-8252-3becbbd86626")
 	//if err != nil {
 	//	logger.Fatalf("%v", err)
 	//}
 	//fmt.Println(p)
 
-	//proxies, err := storage.FindAll(context.TODO())
+	//proxies, err := pstorage.FindAll(context.TODO())
 	//if err != nil {
 	//	logger.Fatalf("%v", err)
 	//}
@@ -129,8 +130,8 @@ func NewApp(cfg *config.Config, logger *logging.Logger) (App, error) {
 	//}
 	//logger.Infof("redis client: %+v\nis null: %v", redisClient, redisClient == nil)
 	//cache := rcache.NewCache(redisClient, logger)
-	//storage := db.NewStorage(mongodbClient, "user_service", logger)
-	//service, err := user.NewService(storage, cache, *logger)
+	//pstorage := db.NewStorage(mongodbClient, "user_service", logger)
+	//service, err := user.NewService(pstorage, cache, *logger)
 	//if err != nil {
 	//	panic(err)
 	//}
