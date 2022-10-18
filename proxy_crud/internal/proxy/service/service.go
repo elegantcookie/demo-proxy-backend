@@ -44,7 +44,7 @@ func (s service) AddProxy(ctx context.Context, dto model.CreateProxyDTO) error {
 }
 
 func (s service) GetAll(ctx context.Context, dto filter.Options) ([]model.Proxy, error) {
-	options := db.NewPSQLFilterOptions(dto.Field, dto.Order)
+	options := db.NewPSQLFilterOptions(dto)
 	proxies, err := s.storage.FindAll(ctx, options)
 	if err != nil {
 		return nil, err

@@ -5,6 +5,7 @@ import "encoding/json"
 var (
 	ErrNotFound         = NewAppError(nil, "not found", "NS-000003", "")
 	WrongSortingOptions = NewAppError(nil, "wrong sorting options", "NS-000010", "")
+	WrongFilterOptions  = NewAppError(nil, "wrong filter options", "NS-000010", "")
 )
 
 type AppError struct {

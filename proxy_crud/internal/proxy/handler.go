@@ -29,7 +29,7 @@ const (
 func (h *Handler) Register(group *gin.RouterGroup) {
 	group.Handle(http.MethodGet, getAllUrl, gin.WrapF(
 		filter.Middleware(
-			apperror.Middleware(h.GetProxies), "port", "ASC")))
+			apperror.Middleware(h.GetProxies), "port", "ASC", 10)))
 	group.Handle(http.MethodGet, getByIDUrl, apperror.GinMiddleware(h.GetProxyByID))
 	group.Handle(http.MethodPost, addProxiesByURL, gin.WrapF(apperror.Middleware(h.AddProxies)))
 	group.Handle(http.MethodDelete, deleteAllURL, gin.WrapF(apperror.Middleware(h.DeleteAll)))
@@ -77,12 +77,25 @@ func (h *Handler) AddProxies(w http.ResponseWriter, r *http.Request) error {
 func (h *Handler) GetProxies(w http.ResponseWriter, r *http.Request) error {
 	w.Header().Set("Content-Type", "application/json")
 
-	var filterOptions filter.Options
-	if options, ok := r.Context().Value(filter.OptionsSortKey).(filter.Options); ok {
-		filterOptions = options
+	var options filter.Options
+	if opts, ok := r.Context().Value(filter.OptionsKey).(filter.Options); ok {
+		options = opts
+	}
+	intFields := []string{"ping", "processing_status", "bl_check"}
+	for _, fieldName := range intFields {
+		val := r.URL.Query().Get(fieldName)
+		options.ValidateIntAndAdd(fieldName, val, filter.OperatorEqual)
 	}
 
-	proxies, err := h.ProxyService.GetAll(r.Context(), filterOptions)
+	strFields := []string{"ip", "external_ip", "country"}
+	for _, fieldName := range strFields {
+		val := r.URL.Query().Get(fieldName)
+		options.ValidateStringAndAdd(fieldName, val, filter.OperatorLike)
+	}
+
+	h.Logger.Printf("%+fieldName", options.FilterOptions.Fields())
+
+	proxies, err := h.ProxyService.GetAll(r.Context(), options)
 	if err != nil {
 		return err
 	}

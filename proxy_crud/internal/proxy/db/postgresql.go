@@ -9,6 +9,7 @@ import (
 	"proxy_crud/internal/proxy/apperror"
 	"proxy_crud/internal/proxy/model"
 	"proxy_crud/internal/proxy/pstorage"
+	"proxy_crud/pkg/api/filter"
 	"proxy_crud/pkg/client/postgresql"
 	"proxy_crud/pkg/logging"
 	"proxy_crud/pkg/utils/convertor"
@@ -20,19 +21,52 @@ type db struct {
 	logger *logging.Logger
 }
 
-type FilterOptions struct {
-	Field string
-	Order string
+type Options struct {
+	FilterOptions filter.IFOptions
+	SortOptions   filter.SOptions
+	//Field         string
+	//Order         string
 }
 
-func (fo *FilterOptions) GetOrderBy() string {
-	return fmt.Sprintf("%s %s", fo.Field, fo.Order)
+func (o *Options) GetOrderBy() string {
+	return fmt.Sprintf("%s %s", o.SortOptions.Field, o.SortOptions.Order)
 }
 
-func NewPSQLFilterOptions(field, order string) pstorage.IFilterOptions {
-	return &FilterOptions{
-		Field: field,
-		Order: order,
+func sqlize(s sq.And, key string, value any, operator string) sq.And {
+	switch operator {
+	case filter.OperatorLike:
+		s = append(s, sq.Eq{key: value})
+	case filter.OperatorGreaterThan:
+		s = append(s, sq.Gt{key: value})
+	case filter.OperatorGreaterThanEq:
+		s = append(s, sq.GtOrEq{key: value})
+	case filter.OperatorLowerThan:
+		s = append(s, sq.Lt{key: value})
+	case filter.OperatorLowerThanEq:
+		s = append(s, sq.LtOrEq{key: value})
+	case filter.OperatorEqual:
+		s = append(s, sq.Eq{key: value})
+	case filter.OperatorNotEqual:
+		s = append(s, sq.NotEq{key: value})
+	}
+
+	return s
+}
+
+func (o *Options) MapOptions() pstorage.Sqlizer {
+	fields := o.FilterOptions.Fields()
+	foLen := len(fields)
+	some := sq.And{}
+	for i := 0; i < foLen; i++ {
+		some = sqlize(some, fields[i].Key, fields[i].Value, fields[i].Operator)
+	}
+	return some
+}
+
+func NewPSQLFilterOptions(options filter.Options) pstorage.IOptions {
+	return &Options{
+		FilterOptions: options.FilterOptions,
+		SortOptions:   options.SortOptions,
 	}
 }
 
@@ -97,24 +131,24 @@ func (d db) FindById(ctx context.Context, id string) (model.Proxy, error) {
 	return pr, nil
 }
 
-func (d db) FindAll(ctx context.Context, options pstorage.IFilterOptions) ([]model.Proxy, error) {
+func (d db) FindAll(ctx context.Context, options pstorage.IOptions) ([]model.Proxy, error) {
 	qb := sq.Select("id, ip, port, external_ip, country, open_ports, active," +
 		" ping, created_at, checked_at, valid_at, bl_check, processing_status").From("public.proxy")
 
 	if options != nil {
-		d.logger.Println("%+v", options)
-		qb = qb.OrderBy(options.GetOrderBy())
+		sql := options.MapOptions()
+		qb = qb.Where(sql)
+		fmt.Println(qb.ToSql())
+		qb = qb.OrderBy(options.GetOrderBy()).PlaceholderFormat(sq.Dollar)
 	}
 	sql, i, err := qb.ToSql()
+	fmt.Println(i)
+
 	if err != nil {
 		return nil, err
 	}
-	//q := `
-	//		SELECT
-	//		FROM public.proxy
-	//`
-	d.logger.Tracef("SQL Query: %s", queryToDebug(sql))
 
+	d.logger.Tracef("SQL Query: %s", queryToDebug(sql))
 	rows, err := d.client.Query(ctx, sql, i...)
 	if err != nil {
 		return nil, err
