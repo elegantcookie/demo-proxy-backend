@@ -1,0 +1,57 @@
+version: '2.3'
+services:
+  postgres:
+    image: postgres:13.3
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: "postgres"
+#      POSTGRES_HOST_AUTH_METHOD: "trust"
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+      - ./sql/create_tables.sql:/docker-entrypoint-initdb.d/create_tables.sql
+
+  zookeeper:
+    hostname: zookeeper
+    image: wurstmeister/zookeeper:3.4.6
+    expose:
+      - "2181"
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: wurstmeister/kafka
+    env_file:
+      - kafka/kafka-variables.env
+    depends_on:
+      - zookeeper
+    ports:
+      - '9092:9092'
+      - '8082:8082'
+      - '8083:8083'
+
+  proxy_checker:
+    build:
+      context: proxy_checker
+    expose:
+      - "10001"
+    ports:
+      - "10001:10001"
+    depends_on:
+      - kafka
+      - proxy_crud
+
+  proxy_crud:
+    build:
+      context: proxy_crud
+#    environment:
+#      KAFKA_URL: kafka:9092
+#      TOPIC: proxy_
+    expose:
+      - "10000"
+    ports:
+      - "10000:10000"
+    depends_on:
+      - kafka
+      - postgres
