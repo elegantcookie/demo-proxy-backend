@@ -1,21 +1,23 @@
 package main
 
 import (
+	"context"
 	_ "github.com/swaggo/files"       // swagger embed files
 	_ "github.com/swaggo/gin-swagger" // gin-swagger middleware
 	"log"
-	_ "proxy_crud/docs"
-	"proxy_crud/internal/app"
-	"proxy_crud/internal/config"
-	"proxy_crud/pkg/logging"
+	"os/signal"
+	"proxy_checker/internal/app"
+	"proxy_checker/internal/config"
+	"proxy_checker/pkg/logging"
+	"syscall"
 )
 
-// @title           Proxy Crud Service
+// @title           Proxy Checker Service
 // @version         1.0
-// @description     CRUD.
+// @description     Checks proxy from crud.
 
 // @host      localhost:10000
-// @BasePath  /api/proxy_crud/v1
+// @BasePath  /api/checker/v1
 
 func main() {
 	log.Print("config initialization")
@@ -30,6 +32,13 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	logger.Println("running Application")
-	a.Run()
+	logger.Println("running application")
+
+	ctx, cancel := signal.NotifyContext(context.Background(),
+		syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	_ = cancel
+	err = a.Run(ctx)
+	if err != nil {
+		log.Println("stopping application")
+	}
 }
