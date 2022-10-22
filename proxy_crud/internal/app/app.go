@@ -1,7 +1,9 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -16,6 +18,11 @@ import (
 	"proxy_crud/internal/proxy"
 	"proxy_crud/internal/proxy/db"
 	"proxy_crud/internal/proxy/service"
+	proxy_group "proxy_crud/internal/proxy_group"
+	pgdb "proxy_crud/internal/proxy_group/db"
+	pgservice "proxy_crud/internal/proxy_group/service"
+	"proxy_crud/pkg/api/filter"
+	"proxy_crud/pkg/client/kafka"
 	"proxy_crud/pkg/client/postgresql"
 	"proxy_crud/pkg/logging"
 	"proxy_crud/pkg/metrics"
@@ -23,10 +30,66 @@ import (
 )
 
 type App struct {
-	cfg        *config.Config
-	logger     *logging.Logger
-	router     *gin.Engine
-	httpServer *http.Server
+	cfg           *config.Config
+	logger        *logging.Logger
+	kafkaProducer kafka.IProducer
+	service       service.Service
+	router        *gin.Engine
+	httpServer    *http.Server
+}
+
+const (
+	statusProcessing = 1
+)
+
+func startProducer(ctx context.Context, logger *logging.Logger, producer kafka.IProducer, service service.Service) {
+
+	defer producer.Close()
+	var options filter.Options
+	sopts := filter.SOptions{
+		Field: "checked_at",
+		Order: "ASC",
+	}
+	initFields := make([]filter.Field, 0)
+	limit := 10000
+	fopts := filter.NewFOptions(true, limit, 1, initFields)
+	options.SortOptions = sopts
+	options.FilterOptions = fopts
+	options.ValidateIntAndAdd("processing_status", "0", filter.OperatorEqual)
+	for true {
+		proxies, err := service.GetAll(ctx, options)
+		if len(proxies) == 0 {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if err != nil {
+			return
+		}
+		for i := 0; i < len(proxies); i++ {
+			i := i
+			go func() {
+				proxies[i].ProcessingStatus = 1
+				err := service.UpdateProxyStatus(ctx, proxies[i].ID, statusProcessing)
+				if err != nil {
+					logger.Errorln(err)
+				}
+				var network bytes.Buffer        // Stand-in for a network connection
+				enc := gob.NewEncoder(&network) // Will write to network.
+
+				err = enc.Encode(proxies[i])
+				if err != nil {
+					logger.Errorln(err)
+				}
+
+				err = producer.Produce(ctx, []byte(proxies[i].ID), network.Bytes())
+				if err != nil {
+					logger.Errorln(err)
+				}
+			}()
+		}
+		time.Sleep(1 * time.Second)
+	}
+
 }
 
 func NewApp(cfg *config.Config, logger *logging.Logger) (App, error) {
@@ -53,26 +116,42 @@ func NewApp(cfg *config.Config, logger *logging.Logger) (App, error) {
 		logger.Fatalf("%v", err)
 	}
 
-	storage := db.NewStorage(psqlClient, logger)
-	fmt.Printf("%v", storage)
+	proxyStorage := db.NewStorage(psqlClient, logger)
+	fmt.Printf("%v", proxyStorage)
 
-	service, _ := service.NewService(storage, logger)
+	proxyGroupStorage := pgdb.NewStorage(psqlClient, logger)
+
+	proxyGroupService, _ := pgservice.NewService(proxyGroupStorage, logger)
+	proxyService, _ := service.NewService(proxyStorage, proxyGroupStorage, logger)
 
 	proxyHandler := proxy.Handler{
 		Logger:       *logger,
-		ProxyService: service,
+		ProxyService: proxyService,
 	}
-	proxyHandler.Register(v1)
+	proxyGroupHandler := proxy_group.Handler{
+		Logger:            *logger,
+		ProxyGroupService: proxyGroupService,
+	}
+	proxyPath := v1.Group("/proxy")
+	proxyHandler.Register(proxyPath)
+
+	proxyGroupPath := v1.Group("/proxy_group")
+	proxyGroupHandler.Register(proxyGroupPath)
+
+	kafkaProducer := kafka.NewClient(context.TODO(), cfg.Kafka.URL, cfg.Kafka.Topic)
 
 	return App{
 		cfg,
 		logger,
+		kafkaProducer,
+		proxyService,
 		router,
 		nil,
 	}, nil
 }
 
 func (a *App) Run() {
+	go startProducer(context.Background(), a.logger, a.kafkaProducer, a.service)
 	a.startHTTP()
 }
 

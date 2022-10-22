@@ -38,6 +38,10 @@ func (e *AppError) Marshal() []byte {
 	return bytes
 }
 
+func BadRequestError(message string) *AppError {
+	return NewAppError(nil, message, "NS-000002", "")
+}
+
 func systemError(developerMessage string) *AppError {
 	return NewAppError(nil, "system error", "NS-000001", developerMessage)
 }

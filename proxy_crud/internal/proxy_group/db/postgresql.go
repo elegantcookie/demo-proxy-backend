@@ -7,12 +7,11 @@ import (
 	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
 	"proxy_crud/internal/apperror"
-	"proxy_crud/internal/proxy/model"
-	"proxy_crud/internal/proxy/pstorage"
+	"proxy_crud/internal/proxy_group/model"
+	"proxy_crud/internal/proxy_group/pgstorage"
 	"proxy_crud/pkg/api/filter"
 	"proxy_crud/pkg/client/postgresql"
 	"proxy_crud/pkg/logging"
-	"proxy_crud/pkg/utils/convertor"
 	"strings"
 )
 
@@ -43,7 +42,7 @@ func sqlize(s sq.And, key string, value any, operator string) sq.And {
 	return s
 }
 
-func NewPSQLFilterOptions(options filter.Options) pstorage.IOptions {
+func NewPSQLFilterOptions(options filter.Options) pgstorage.IOptions {
 	return &Options{
 		FilterOptions: options.FilterOptions,
 		SortOptions:   options.SortOptions,
@@ -54,7 +53,7 @@ func queryToDebug(q string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(q, "\t", ""), "\n", " ")
 }
 
-func proxiesToArray(proxies []model.Proxy) []any {
+func proxiesToArray(proxies []model.ProxyGroup) []any {
 	s := make([]any, len(proxies))
 	for i, v := range proxies {
 		s[i] = v
@@ -62,58 +61,38 @@ func proxiesToArray(proxies []model.Proxy) []any {
 	return s
 }
 
-func (d db) Insert(ctx context.Context, proxies []model.Proxy) error {
-	columns := []string{
-		"id", "ip", "port", "external_ip", "country", "open_ports", "active",
-		"ping", "created_at", "checked_at", "valid_at", "bl_check", "processing_status"}
-	arr := proxiesToArray(proxies)
-	ddproxies := convertor.StructsToArrays(arr)
-	_, err := d.client.CopyFrom(
-		ctx,
-		pgx.Identifier{"proxy"},
-		columns,
-		pgx.CopyFromRows(ddproxies),
-	)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (d db) InsertOne(ctx context.Context, proxy model.Proxy) error {
+func (d db) InsertOne(ctx context.Context, pg model.ProxyGroup) error {
 	q := `
-		INSERT INTO proxy (ip, port, external_ip, created_at, country)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO public.proxy_group (id, name)
+		VALUES ($1, $2)
 		`
 	d.logger.Tracef("SQL Query: %s", queryToDebug(q))
-	d.client.QueryRow(ctx, q, proxy.Ip, proxy.Port, proxy.ExternalIP, proxy.CreatedAt, proxy.Country)
+	d.client.QueryRow(ctx, q, pg.ID, pg.Name)
 	return nil
 }
 
-func (d db) FindById(ctx context.Context, id string) (model.Proxy, error) {
+func (d db) FindById(ctx context.Context, id string) (model.ProxyGroup, error) {
 	q := `
-			SELECT id, ip, port, external_ip, country, open_ports, active, ping, created_at, checked_at, valid_at, bl_check, processing_status
-			FROM public.proxy WHERE id=$1
+			SELECT id, name
+			FROM public.proxy_group WHERE id=$1
 	`
 	d.logger.Tracef("SQL Query: %s", queryToDebug(q))
 
-	var pr model.Proxy
+	var pg model.ProxyGroup
 
 	err := d.client.QueryRow(ctx, q, id).Scan(
-		&pr.ID, &pr.Ip, &pr.Port, &pr.ExternalIP, &pr.Country, &pr.OpenPorts,
-		&pr.Active, &pr.Ping, &pr.CreatedAt, &pr.CheckedAt, &pr.ValidAt, &pr.BLCheck, &pr.ProcessingStatus)
+		&pg.ID, &pg.Name)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return pr, apperror.ErrNotFound
+			return pg, apperror.ErrNotFound
 		}
-		return pr, err
+		return pg, err
 	}
-	return pr, nil
+	return pg, nil
 }
 
-func (d db) FindAll(ctx context.Context, options pstorage.IOptions) ([]model.Proxy, error) {
-	qb := sq.Select("id, ip, port, external_ip, country, open_ports, active," +
-		" ping, created_at, checked_at, valid_at, bl_check, processing_status").From("public.proxy")
+func (d db) FindAll(ctx context.Context, options pgstorage.IOptions) ([]model.ProxyGroup, error) {
+	qb := sq.Select("id, name").From("public.proxy_group")
 
 	if options != nil {
 		sql := options.MapOptions()
@@ -136,29 +115,28 @@ func (d db) FindAll(ctx context.Context, options pstorage.IOptions) ([]model.Pro
 		return nil, err
 	}
 
-	proxies := make([]model.Proxy, 0)
+	proxyGroups := make([]model.ProxyGroup, 0)
 
 	for rows.Next() {
-		var pr model.Proxy
+		var pg model.ProxyGroup
 
 		err := rows.Scan(
-			&pr.ID, &pr.Ip, &pr.Port, &pr.ExternalIP, &pr.Country, &pr.OpenPorts,
-			&pr.Active, &pr.Ping, &pr.CreatedAt, &pr.CheckedAt, &pr.ValidAt, &pr.BLCheck, &pr.ProcessingStatus)
+			&pg.ID, &pg.Name)
 		if err != nil {
 			return nil, err
 		}
 
-		proxies = append(proxies, pr)
+		proxyGroups = append(proxyGroups, pg)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
-	return proxies, nil
+	return proxyGroups, nil
 }
 
-func (d db) Update(ctx context.Context, proxy model.Proxy) error {
+func (d db) Update(ctx context.Context, proxy model.ProxyGroup) error {
 	return nil
 }
 
@@ -168,7 +146,7 @@ func (d db) Delete(ctx context.Context, id string) error {
 
 func (d db) DeleteAll(ctx context.Context) error {
 	q := `
-			TRUNCATE public.proxy
+			TRUNCATE public.proxy_group
 	`
 	d.logger.Tracef("SQL Query: %s", queryToDebug(q))
 
@@ -180,7 +158,7 @@ func (d db) DeleteAll(ctx context.Context) error {
 	return nil
 }
 
-func NewStorage(client postgresql.Client, logger *logging.Logger) pstorage.Storage {
+func NewStorage(client postgresql.Client, logger *logging.Logger) pgstorage.Storage {
 	return &db{
 		client: client,
 		logger: logger,

@@ -1,4 +1,4 @@
-package pstorage
+package pgstorage
 
 type FilterOptions struct {
 	Field string

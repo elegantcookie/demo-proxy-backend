@@ -3,7 +3,7 @@ package db
 import (
 	"fmt"
 	sq "github.com/Masterminds/squirrel"
-	"proxy_crud/internal/proxy/pstorage"
+	"proxy_crud/internal/proxy_group/pgstorage"
 	"proxy_crud/pkg/api/filter"
 )
 
@@ -23,7 +23,7 @@ func (o *Options) GetOffset() uint64 {
 	return uint64(o.FilterOptions.Limit() * (o.FilterOptions.Page() - 1))
 }
 
-func (o *Options) MapOptions() pstorage.Sqlizer {
+func (o *Options) MapOptions() pgstorage.Sqlizer {
 	fields := o.FilterOptions.Fields()
 	foLen := len(fields)
 	some := sq.And{}

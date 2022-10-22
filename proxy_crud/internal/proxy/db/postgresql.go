@@ -5,8 +5,9 @@ import (
 	"errors"
 	"fmt"
 	sq "github.com/Masterminds/squirrel"
+	"github.com/fatih/structs"
 	"github.com/jackc/pgx/v5"
-	"proxy_crud/internal/proxy/apperror"
+	"proxy_crud/internal/apperror"
 	"proxy_crud/internal/proxy/model"
 	"proxy_crud/internal/proxy/pstorage"
 	"proxy_crud/pkg/api/filter"
@@ -21,21 +22,11 @@ type db struct {
 	logger *logging.Logger
 }
 
-type Options struct {
-	FilterOptions filter.IFOptions
-	SortOptions   filter.SOptions
-	//Field         string
-	//Order         string
-}
-
-func (o *Options) GetOrderBy() string {
-	return fmt.Sprintf("%s %s", o.SortOptions.Field, o.SortOptions.Order)
-}
-
+// TODO: refactor
 func sqlize(s sq.And, key string, value any, operator string) sq.And {
 	switch operator {
 	case filter.OperatorLike:
-		s = append(s, sq.Eq{key: value})
+		s = append(s, sq.Like{key: value})
 	case filter.OperatorGreaterThan:
 		s = append(s, sq.Gt{key: value})
 	case filter.OperatorGreaterThanEq:
@@ -51,16 +42,6 @@ func sqlize(s sq.And, key string, value any, operator string) sq.And {
 	}
 
 	return s
-}
-
-func (o *Options) MapOptions() pstorage.Sqlizer {
-	fields := o.FilterOptions.Fields()
-	foLen := len(fields)
-	some := sq.And{}
-	for i := 0; i < foLen; i++ {
-		some = sqlize(some, fields[i].Key, fields[i].Value, fields[i].Operator)
-	}
-	return some
 }
 
 func NewPSQLFilterOptions(options filter.Options) pstorage.IOptions {
@@ -85,7 +66,7 @@ func proxiesToArray(proxies []model.Proxy) []any {
 func (d db) Insert(ctx context.Context, proxies []model.Proxy) error {
 	columns := []string{
 		"id", "ip", "port", "external_ip", "country", "open_ports", "active",
-		"ping", "created_at", "checked_at", "valid_at", "bl_check", "processing_status"}
+		"ping", "created_at", "checked_at", "valid_at", "bl_check", "processing_status", "proxy_group_id"}
 	arr := proxiesToArray(proxies)
 	ddproxies := convertor.StructsToArrays(arr)
 	_, err := d.client.CopyFrom(
@@ -102,8 +83,8 @@ func (d db) Insert(ctx context.Context, proxies []model.Proxy) error {
 
 func (d db) InsertOne(ctx context.Context, proxy model.Proxy) error {
 	q := `
-		INSERT INTO proxy (ip, port, external_ip, created_at, country)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO proxy (ip, port, external_ip, created_at, country, proxy_group_id)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		`
 	d.logger.Tracef("SQL Query: %s", queryToDebug(q))
 	d.client.QueryRow(ctx, q, proxy.Ip, proxy.Port, proxy.ExternalIP, proxy.CreatedAt, proxy.Country)
@@ -112,7 +93,7 @@ func (d db) InsertOne(ctx context.Context, proxy model.Proxy) error {
 
 func (d db) FindById(ctx context.Context, id string) (model.Proxy, error) {
 	q := `
-			SELECT id, ip, port, external_ip, country, open_ports, active, ping, created_at, checked_at, valid_at, bl_check, processing_status
+			SELECT id, ip, port, external_ip, country, open_ports, active, ping, created_at, checked_at, valid_at, bl_check, processing_status, proxy_group_id
 			FROM public.proxy WHERE id=$1
 	`
 	d.logger.Tracef("SQL Query: %s", queryToDebug(q))
@@ -121,7 +102,7 @@ func (d db) FindById(ctx context.Context, id string) (model.Proxy, error) {
 
 	err := d.client.QueryRow(ctx, q, id).Scan(
 		&pr.ID, &pr.Ip, &pr.Port, &pr.ExternalIP, &pr.Country, &pr.OpenPorts,
-		&pr.Active, &pr.Ping, &pr.CreatedAt, &pr.CheckedAt, &pr.ValidAt, &pr.BLCheck, &pr.ProcessingStatus)
+		&pr.Active, &pr.Ping, &pr.CreatedAt, &pr.CheckedAt, &pr.ValidAt, &pr.BLCheck, &pr.ProcessingStatus, &pr.ProxyGroupID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return pr, apperror.ErrNotFound
@@ -133,13 +114,15 @@ func (d db) FindById(ctx context.Context, id string) (model.Proxy, error) {
 
 func (d db) FindAll(ctx context.Context, options pstorage.IOptions) ([]model.Proxy, error) {
 	qb := sq.Select("id, ip, port, external_ip, country, open_ports, active," +
-		" ping, created_at, checked_at, valid_at, bl_check, processing_status").From("public.proxy")
+		" ping, created_at, checked_at, valid_at, bl_check, processing_status, proxy_group_id").From("public.proxy")
 
 	if options != nil {
 		sql := options.MapOptions()
-		qb = qb.Where(sql)
-		fmt.Println(qb.ToSql())
-		qb = qb.OrderBy(options.GetOrderBy()).PlaceholderFormat(sq.Dollar)
+		qb = qb.Where(sql).
+			OrderBy(options.GetOrderBy()).
+			PlaceholderFormat(sq.Dollar).
+			Limit(options.GetLimit()).
+			Offset(options.GetOffset())
 	}
 	sql, i, err := qb.ToSql()
 	fmt.Println(i)
@@ -161,7 +144,7 @@ func (d db) FindAll(ctx context.Context, options pstorage.IOptions) ([]model.Pro
 
 		err := rows.Scan(
 			&pr.ID, &pr.Ip, &pr.Port, &pr.ExternalIP, &pr.Country, &pr.OpenPorts,
-			&pr.Active, &pr.Ping, &pr.CreatedAt, &pr.CheckedAt, &pr.ValidAt, &pr.BLCheck, &pr.ProcessingStatus)
+			&pr.Active, &pr.Ping, &pr.CreatedAt, &pr.CheckedAt, &pr.ValidAt, &pr.BLCheck, &pr.ProcessingStatus, &pr.ProxyGroupID)
 		if err != nil {
 			return nil, err
 		}
@@ -177,6 +160,24 @@ func (d db) FindAll(ctx context.Context, options pstorage.IOptions) ([]model.Pro
 }
 
 func (d db) Update(ctx context.Context, proxy model.Proxy) error {
+	m := structs.Map(proxy)
+	delete(m, "id")
+	fmt.Printf("%+v", proxy)
+	qb := sq.Update("public.proxy").SetMap(m).
+		Where(sq.Eq{"id": proxy.ID}).
+		PlaceholderFormat(sq.Dollar)
+
+	sql, i, err := qb.ToSql()
+	if err != nil {
+		return err
+	}
+	d.logger.Tracef("SQL Query: %s", queryToDebug(sql))
+
+	result, err := d.client.Exec(ctx, sql, i...)
+	if err != nil {
+		return err
+	}
+	d.logger.Info(result)
 	return nil
 }
 

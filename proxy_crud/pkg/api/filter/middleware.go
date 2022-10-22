@@ -3,7 +3,6 @@ package filter
 import (
 	"context"
 	"net/http"
-	"proxy_crud/internal/proxy/apperror"
 	"strconv"
 	"strings"
 )
@@ -15,7 +14,9 @@ const (
 	OptionsKey = "options"
 )
 
-func getSortOptions(r *http.Request, defaultSortField, defaultSortOrder string) (opts SOptions, err *apperror.AppError) {
+// TODO: refactor
+
+func getSortOptions(r *http.Request, defaultSortField, defaultSortOrder string) (opts SOptions) {
 	sortBy := r.URL.Query().Get("sort_by")
 	sortOrder := r.URL.Query().Get("sort_order")
 
@@ -27,58 +28,60 @@ func getSortOptions(r *http.Request, defaultSortField, defaultSortOrder string) 
 	} else {
 		upperSortOrder := strings.ToUpper(sortOrder)
 		if upperSortOrder != ascendingSort && upperSortOrder != descendingSort {
-			return opts, apperror.WrongSortingOptions
+			sortOrder = defaultSortOrder
 		}
 	}
 	opts = SOptions{
 		Field: sortBy,
 		Order: sortOrder,
 	}
-	return opts, nil
+	return opts
 }
 
-func getFilterOptions(r *http.Request, defaultLimit int) (opts *FOptions, err *apperror.AppError) {
+func getFilterOptions(r *http.Request, defaultLimit, defaultPage int) (opts *FOptions) {
 	limitFromQuery := r.URL.Query().Get("limit")
+	pageFromQuery := r.URL.Query().Get("page")
 
 	var limit int
 	if limitFromQuery == "" {
 		limit = defaultLimit
 	} else {
 		var parseErr error
-		if limit, parseErr = strconv.Atoi(limitFromQuery); parseErr != nil {
-			return opts, apperror.WrongFilterOptions
+		if limit, parseErr = strconv.Atoi(limitFromQuery); parseErr != nil || limit < 1 {
+			limit = defaultLimit
 		}
 	}
+	var page int
+	if pageFromQuery == "" {
+		page = defaultPage
+	} else {
+		var parseErr error
+		if page, parseErr = strconv.Atoi(pageFromQuery); parseErr != nil || page < 1 {
+			page = defaultPage
+		}
+	}
+
 	opts = &FOptions{
 		apply:  true,
 		limit:  limit,
+		page:   page,
 		fields: make([]Field, 0),
 	}
-	return opts, nil
+	return opts
 }
 
 func Middleware(h http.HandlerFunc, defaultSortField, defaultSortOrder string, defaultLimit int) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		sortOptions, err := getSortOptions(r, defaultSortField, defaultSortOrder)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write(err.Marshal())
-			return
-		}
-		filterOptions, err := getFilterOptions(r, defaultLimit)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write(err.Marshal())
-			return
-		}
+		w.Header().Set("Content-Type", "application/json")
 
-		//fmt.Printf("%+v", sortOptions)
+		sortOptions := getSortOptions(r, defaultSortField, defaultSortOrder)
+		filterOptions := getFilterOptions(r, defaultLimit, 1)
+
 		opts := Options{
 			SortOptions:   sortOptions,
 			FilterOptions: filterOptions,
 		}
 		ctx := context.WithValue(r.Context(), OptionsKey, opts)
-		//ctx = context.WithValue(ctx, OptionsFilterKey, filterOptions)
 		r = r.WithContext(ctx)
 		h(w, r)
 	}

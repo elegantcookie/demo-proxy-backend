@@ -2,6 +2,7 @@ package filter
 
 type IFOptions interface {
 	Limit() int
+	Page() int
 	Apply() bool
 	AddField(key string, value any, operator string, dtype string)
 	Fields() []Field
@@ -9,6 +10,9 @@ type IFOptions interface {
 
 func (o *FOptions) Limit() int {
 	return o.limit
+}
+func (o *FOptions) Page() int {
+	return o.page
 }
 func (o *FOptions) Apply() bool {
 	return o.apply

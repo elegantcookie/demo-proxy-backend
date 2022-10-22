@@ -17,6 +17,8 @@ type Storage interface {
 
 type IOptions interface {
 	GetOrderBy() string
+	GetLimit() uint64
+	GetOffset() uint64
 	MapOptions() Sqlizer
 }
 

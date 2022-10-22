@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"io"
 	"net/http"
-	"proxy_crud/internal/proxy/apperror"
+	"proxy_crud/internal/apperror"
 	"proxy_crud/internal/proxy/model"
 	"proxy_crud/internal/proxy/service"
 	"proxy_crud/pkg/api/filter"
@@ -21,8 +21,9 @@ type Handler struct {
 
 const (
 	getAllUrl       = "/get/all"
-	getByIDUrl      = "/get/id/:id"
 	addProxiesByURL = "/add/many/url"
+	updateProxyURL  = "/upd/id/:id"
+	getByIDUrl      = "/get/id/:id"
 	deleteAllURL    = "/delete/all"
 )
 
@@ -31,6 +32,7 @@ func (h *Handler) Register(group *gin.RouterGroup) {
 		filter.Middleware(
 			apperror.Middleware(h.GetProxies), "port", "ASC", 10)))
 	group.Handle(http.MethodGet, getByIDUrl, apperror.GinMiddleware(h.GetProxyByID))
+	group.Handle(http.MethodPut, updateProxyURL, apperror.GinMiddleware(h.UpdateProxy))
 	group.Handle(http.MethodPost, addProxiesByURL, gin.WrapF(apperror.Middleware(h.AddProxies)))
 	group.Handle(http.MethodDelete, deleteAllURL, gin.WrapF(apperror.Middleware(h.DeleteAll)))
 }
@@ -51,7 +53,7 @@ func (h *Handler) AddProxies(w http.ResponseWriter, r *http.Request) error {
 			continue
 		}
 
-		proxyDTO, err := model.NewCreateProxyDTO(pf.Ip, pf.Port, pf.ExternalIp, pf.Country)
+		proxyDTO, err := model.NewCreateProxyDTO(pf.Ip, pf.Port, pf.ExternalIp, pf.Country, pf.ProxyGroupID)
 		if err != nil {
 			h.Logger.Errorf("%v", err)
 			continue
@@ -66,7 +68,7 @@ func (h *Handler) AddProxies(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// GetUsers swaggo
+// GetProxies swaggo
 // @Summary Returns data of all user_service
 // @Accept json
 // @Produce json
@@ -93,7 +95,11 @@ func (h *Handler) GetProxies(w http.ResponseWriter, r *http.Request) error {
 		options.ValidateStringAndAdd(fieldName, val, filter.OperatorLike)
 	}
 
-	h.Logger.Printf("%+fieldName", options.FilterOptions.Fields())
+	boolFields := []string{"active"}
+	for _, fieldName := range boolFields {
+		val := r.URL.Query().Get(fieldName)
+		options.ValidateBoolAndAdd(fieldName, val, filter.OperatorEqual)
+	}
 
 	proxies, err := h.ProxyService.GetAll(r.Context(), options)
 	if err != nil {
@@ -108,6 +114,26 @@ func (h *Handler) GetProxies(w http.ResponseWriter, r *http.Request) error {
 	w.WriteHeader(http.StatusOK)
 	w.Write(bytes)
 	return nil
+}
+
+func (h *Handler) UpdateProxy(c *gin.Context) error {
+	id := c.Param("id")
+	_, err := h.ProxyService.GetById(c, id)
+	if err != nil {
+		return err
+	}
+	var dto model.UpdateProxyDTO
+	err = json.NewDecoder(c.Request.Body).Decode(&dto)
+	if err != nil {
+		return err
+	}
+	err = h.ProxyService.Update(c, id, dto)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
 }
 
 func (h *Handler) GetProxyByID(c *gin.Context) error {

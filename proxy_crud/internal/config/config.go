@@ -19,10 +19,14 @@ type Config struct {
 	AppConfig struct {
 		LogLevel string `env:"LOG_LEVEL" env-default:"trace"`
 	}
+	Kafka struct {
+		URL   string `env:"KAFKA_URL" env-default:"kafka:9092"`
+		Topic string `env:"TOPIC" env-default:"proxy_checker"`
+	}
 }
 
 type StorageConfig struct {
-	Host     string `env:"HOST" env-default:"localhost"`
+	Host     string `env:"HOST" env-default:"postgres"`
 	Port     string `env:"PORT" env-default:"5432"`
 	Database string `env:"DATABASE" env-default:"postgres"`
 	Username string `env:"POSTGRES_USERNAME" env-default:"postgres"`

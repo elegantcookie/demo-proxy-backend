@@ -1,16 +1,15 @@
-package pstorage
+package pgstorage
 
 import (
 	"context"
-	"proxy_crud/internal/proxy/model"
+	"proxy_crud/internal/proxy_group/model"
 )
 
 type Storage interface {
-	Insert(ctx context.Context, proxies []model.Proxy) error
-	InsertOne(ctx context.Context, proxy model.Proxy) error
-	FindById(ctx context.Context, id string) (model.Proxy, error)
-	FindAll(ctx context.Context, options IOptions) ([]model.Proxy, error)
-	Update(ctx context.Context, proxy model.Proxy) error
+	InsertOne(ctx context.Context, proxy model.ProxyGroup) error
+	FindById(ctx context.Context, id string) (model.ProxyGroup, error)
+	FindAll(ctx context.Context, options IOptions) ([]model.ProxyGroup, error)
+	Update(ctx context.Context, proxy model.ProxyGroup) error
 	Delete(ctx context.Context, id string) error
 	DeleteAll(ctx context.Context) error
 }
